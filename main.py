@@ -1,12 +1,35 @@
-from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi import FastAPI, UploadFile, File, Form, Request, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os, shutil
+from datetime import datetime
 from db import init_db, SessionLocal, Log, Test, DriverEnum, CarEnum, MissionEnum, LogTypeEnum
 from analysis import analyze_log
+from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
+from dotenv import load_dotenv
+import logging
+logger = logging.getLogger("uvicorn")
+
+load_dotenv()
 
 app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
+templates = Jinja2Templates(directory="templates")
+
+# --- Configurar OAuth con Google ---
+oauth = OAuth()
+oauth.register(
+    name="google",
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+
+ALLOWED_USERS = [u.strip() for u in os.getenv("ALLOWED_USERS", "").split(",") if u]
+
 
 UPLOAD_DIR = "uploads"
 GRAPH_DIR = "static"
@@ -14,10 +37,28 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(GRAPH_DIR, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
 
 init_db()
 
+
+
+# Aux functions
+def require_auth(request: Request):
+    user = request.session.get("user")
+    if not user:
+        # Lanzamos una excepción para cortar el flujo
+        raise HTTPException(
+            status_code=status.HTTP_303_SEE_OTHER,
+            detail="Necesitas iniciar sesión",
+            headers={"Location": "/login"},
+        )
+    email = user.get("email")
+    if email not in ALLOWED_USERS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para esta acción"
+        )
+    return user
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -29,22 +70,63 @@ def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "logs": logs, "tests": tests})
 
 
-@app.post("/upload", response_class=HTMLResponse)
-async def upload(request: Request, file: UploadFile = File(...), vehicle_id: str = Form(...)):
-    filename = f"{vehicle_id}_{file.filename}"
-    path = os.path.join(UPLOAD_DIR, filename)
-    with open(path, "wb") as buffer:
+# --- Formulario para añadir TEST ---
+@app.get("/add_test", response_class=HTMLResponse)
+def add_test_form(request: Request, user=Depends(require_auth)):
+    logger.info("asd")
+    return templates.TemplateResponse("add_test.html", {
+        "request": request,
+        # "pilots": [p.value for p in PilotEnum]
+    })
+
+
+@app.post("/add_test")
+def add_test(
+    name: str = Form(...),
+    description: str = Form(...),
+    user=Depends(require_auth)
+):
+    db = SessionLocal()
+    test = Test(name=name, description=description)
+    db.add(test)
+    db.commit()
+    db.close()
+    return RedirectResponse(url="/", status_code=303)
+
+
+# --- Formulario para añadir LOG ---
+@app.get("/add_log", response_class=HTMLResponse)
+def add_test_form(request: Request, user=Depends(require_auth)):
+    db = SessionLocal()
+    tests = db.query(Test).all()
+    db.close()
+    return templates.TemplateResponse("add_log.html", {"request": request, "tests": tests})
+
+
+@app.post("/add_log")
+async def add_log(
+    test_id: int = Form(...),
+    file: UploadFile = File(...),
+    user=Depends(require_auth)
+):
+    db = SessionLocal()
+
+    save_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    db = SessionLocal()
-    log = Log(filename=filename, filepath=path,
-                  description="")
-    db.add(log)
+    new_log = Log(
+        test_id=test_id,
+        filename=file.filename,
+        filepath=save_path,
+        uploaded_at=datetime.utcnow()
+    )
+
+    db.add(new_log)
     db.commit()
     db.close()
 
-    return templates.TemplateResponse("upload_success.html",
-        {"request": request, "filename": filename})
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.get("/download/{log_id}")
@@ -61,3 +143,32 @@ def download_log(log_id: int):
     
     filename = os.path.basename(file_path)
     return FileResponse(path=file_path, filename=filename, media_type='application/octet-stream')
+
+
+@app.get("/login")
+async def login(request: Request):
+    redirect_uri = request.url_for("auth_callback")
+    return await oauth.google.authorize_redirect(
+        request,
+        redirect_uri,
+        prompt="select_account"  # fuerza el selector de cuentas
+    )
+
+
+@app.get("/auth/callback")
+async def auth_callback(request: Request):
+    token = await oauth.google.authorize_access_token(request)
+    user_info = token.get("userinfo")
+
+    if user_info:
+        request.session["user"] = dict(user_info)
+    return RedirectResponse(url="/")
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.pop("user", None)
+    return RedirectResponse(url="/")
+
+
+
