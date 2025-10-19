@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os, shutil
@@ -18,12 +18,15 @@ templates = Jinja2Templates(directory="templates")
 
 init_db()
 
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     db = SessionLocal()
     logs = db.query(Log).all()
     db.close()
     return templates.TemplateResponse("index.html", {"request": request, "logs": logs})
+
 
 @app.post("/upload", response_class=HTMLResponse)
 async def upload(request: Request, file: UploadFile = File(...), vehicle_id: str = Form(...)):
@@ -41,3 +44,19 @@ async def upload(request: Request, file: UploadFile = File(...), vehicle_id: str
 
     return templates.TemplateResponse("upload_success.html",
         {"request": request, "filename": filename})
+
+
+@app.get("/download/{log_id}")
+def download_log(log_id: int):
+    db = SessionLocal()
+    log = db.query(Log).filter(Log.id == log_id).first()
+    db.close()
+    if not log:
+        return {"error": "Archivo no encontrado"}
+    
+    file_path = log.filepath
+    if not os.path.exists(file_path):
+        return {"error": "El archivo no existe en el servidor"}
+    
+    filename = os.path.basename(file_path)
+    return FileResponse(path=file_path, filename=filename, media_type='application/octet-stream')

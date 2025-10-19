@@ -24,6 +24,7 @@
                 <th>Vehículo</th>
                 <th>Fecha subida</th>
                 <th>Descripción</th>
+                <th>Descargar</th>
             </tr>
         </thead>
         <tbody>
@@ -34,6 +35,7 @@
                 <td>{{ log.vehicle_id }}</td>
                 <td>{{ log.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                 <td>{{ log.description }}</td>
+                <td><a href="/download/{{ log.id }}" class="btn btn-sm btn-primary">⬇ Descargar</a></td>
             </tr>
             {% endfor %}
         </tbody>
