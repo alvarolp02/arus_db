@@ -24,8 +24,9 @@ init_db()
 def index(request: Request):
     db = SessionLocal()
     logs = db.query(Log).all()
+    tests = db.query(Test).all()
     db.close()
-    return templates.TemplateResponse("index.html", {"request": request, "logs": logs})
+    return templates.TemplateResponse("index.html", {"request": request, "logs": logs, "tests": tests})
 
 
 @app.post("/upload", response_class=HTMLResponse)
