@@ -67,16 +67,20 @@ def index(request: Request):
     logs = db.query(Log).all()
     tests = db.query(Test).all()
     db.close()
-    return templates.TemplateResponse("index.html", {"request": request, "logs": logs, "tests": tests})
+    user = request.session.get("user")
+    return templates.TemplateResponse("index.html", 
+            {"request": request,
+             "logs": logs, 
+             "tests": tests, 
+             "user": user,
+             "allowed_users": ALLOWED_USERS})
 
 
 # --- Formulario para añadir TEST ---
 @app.get("/add_test", response_class=HTMLResponse)
 def add_test_form(request: Request, user=Depends(require_auth)):
-    logger.info("asd")
     return templates.TemplateResponse("add_test.html", {
-        "request": request,
-        # "pilots": [p.value for p in PilotEnum]
+        "request": request
     })
 
 
@@ -84,10 +88,11 @@ def add_test_form(request: Request, user=Depends(require_auth)):
 def add_test(
     name: str = Form(...),
     description: str = Form(...),
+    date: datetime = Form(...),
     user=Depends(require_auth)
 ):
     db = SessionLocal()
-    test = Test(name=name, description=description)
+    test = Test(name=name, description=description, date=date)
     db.add(test)
     db.commit()
     db.close()
@@ -100,13 +105,24 @@ def add_test_form(request: Request, user=Depends(require_auth)):
     db = SessionLocal()
     tests = db.query(Test).all()
     db.close()
-    return templates.TemplateResponse("add_log.html", {"request": request, "tests": tests})
+    return templates.TemplateResponse("add_log.html", 
+    {"request": request,
+     "tests": tests,
+     "drivers": [d.value for d in DriverEnum],
+     "vehicles": [v.value for v in CarEnum],
+     "log_types": [t.value for t in LogTypeEnum],
+     "missions": [m.value for m in MissionEnum]})
 
 
 @app.post("/add_log")
 async def add_log(
     test_id: int = Form(...),
     file: UploadFile = File(...),
+    mission: str = Form(...),
+    driver: str = Form(...),
+    log_type: str = Form(...),
+    vehicle: str = Form(...),
+    description: str = Form(...),
     user=Depends(require_auth)
 ):
     db = SessionLocal()
@@ -119,6 +135,11 @@ async def add_log(
         test_id=test_id,
         filename=file.filename,
         filepath=save_path,
+        mission=mission or None,
+        driver=driver or None,
+        log_type=log_type or None,
+        vehicle=vehicle or None,
+        description=description,
         uploaded_at=datetime.utcnow()
     )
 
