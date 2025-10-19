@@ -112,7 +112,6 @@ def edit_test_form(request: Request, test_id: int, user=Depends(require_auth)):
         {"request": request, "test": test, "user": user},
     )
 
-
 @app.post("/edit_test/{test_id}")
 def update_test(
     test_id: int,
@@ -186,7 +185,56 @@ async def add_log(
 
     return RedirectResponse(url="/", status_code=303)
 
+# --- Form to edit a Log ---
+@app.get("/edit_log/{log_id}", response_class=HTMLResponse)
+def add_test_form(request: Request, log_id: int, user=Depends(require_auth)):
+    db = SessionLocal()
+    tests = db.query(Test).all()
+    log = db.query(Log).filter(Log.id == log_id).first()
+    db.close()
+    if not log:
+        return HTMLResponse("<h3>Log not found</h3>", status_code=404)
+    return templates.TemplateResponse("edit_log.html", 
+    {"request": request,
+     "log": log,
+     "user": user,
+     "tests": tests,
+     "drivers": [d.value for d in DriverEnum],
+     "vehicles": [v.value for v in CarEnum],
+     "log_types": [t.value for t in LogTypeEnum],
+     "missions": [m.value for m in MissionEnum]})
 
+@app.post("/edit_log/{log_id}")
+async def add_log(
+    log_id: int,
+    test_id: int = Form(...),
+    mission: str = Form(...),
+    driver: str = Form(...),
+    log_type: str = Form(...),
+    vehicle: str = Form(...),
+    description: str = Form(...),
+    user=Depends(require_auth)
+):
+    db = SessionLocal()
+    log = db.query(Log).filter(Log.id == log_id).first()
+    if not log:
+        db.close()
+        return HTMLResponse("<h3>Log not found</h3>", status_code=404)
+    
+    log.test_id = test_id
+    log.mission=mission or None
+    log.driver=driver or None
+    log.log_type=log_type or None
+    log.vehicle=vehicle or None
+    log.description=description
+
+    db.commit()
+    db.close()
+
+    return RedirectResponse(url="/", status_code=303)
+
+
+# --- Download capability ---
 @app.get("/download/{log_id}")
 def download_log(log_id: int):
     db = SessionLocal()
@@ -203,6 +251,7 @@ def download_log(log_id: int):
     return FileResponse(path=file_path, filename=filename, media_type='application/octet-stream')
 
 
+# --- User login ---
 @app.get("/login")
 async def login(request: Request):
     redirect_uri = request.url_for("auth_callback")

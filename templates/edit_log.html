@@ -7,11 +7,11 @@
 </head>
 <body class="p-4">
   <div class="container">
-    <h2>➕ New Log</h2>
-    <form action="/add_log" method="post" enctype="multipart/form-data" class="mt-3">
+    <h2>Edit Log</h2>
+    <form action="/edit_log/{{ log.id }}" method="post" enctype="multipart/form-data" class="mt-3">
       <div class="mb-3">
         <label class="form-label">Test id</label>
-        <select name="test_id" class="form-select" required>
+        <select name="test_id" class="form-select" value="{{ log.name }}" required>
           {% for t in tests %}
           <option value="{{ t.id }}">#{{ t.id }} - {{ t.name }}</option>
           {% endfor %}
@@ -19,47 +19,43 @@
       </div>
       <div class="mb-3">
         <label class="form-label">Mission</label>
-        <select name="mission" class="form-select">
-          <option value="" selected>-</option>
+        <select name="mission" class="form-select" value="{{ log.mission }}">
+          <option value="">-</option>
           {% for m in missions %}
-          <option value={{m}}>{{m}}</option>
+          <option value={{m}} {% if log.mission.value == m %}selected{% endif %}>{{m}}</option>
           {% endfor %}
         </select>
       </div>
       <div class="mb-3">
         <label class="form-label">Vehicle</label>
         <select name="vehicle" class="form-select">
-          <option value="" selected>-</option>
+          <option value="">-</option>
           {% for v in vehicles %}
-          <option value={{v}}>{{v}}</option>
+          <option value={{v}} {% if log.vehicle.value == v %}selected{% endif %}>{{v}}</option>
           {% endfor %}
         </select>
       </div>
       <div class="mb-3">
         <label class="form-label">Type</label>
-        <select name="log_type" class="form-select">
-          <option value="" selected>-</option>
+        <select name="log_type" class="form-select" value="{{ log.log_type }}">
+          <option value="">-</option>
           {% for t in log_types %}
-          <option value={{t}}>{{t}}</option>
+          <option value={{t}} {% if log.log_type.value == t %}selected{% endif %}>{{t}}</option>
           {% endfor %}
         </select>
       </div>
       <div class="mb-3">
         <label class="form-label">Driver</label>
-        <select name="driver" class="form-select">
-          <option value="" selected>-</option>
+        <select name="driver" class="form-select" value="{{ log.driver }}">
+          <option value="">-</option>
           {% for d in drivers %}
-          <option value={{d}}>{{d}}</option>
+          <option value={{d}} {% if log.driver.value == d %}selected{% endif %}>{{d}}</option>
           {% endfor %}
         </select>
       </div>
       <div class="mb-3">
-        <label class="form-label">File</label>
-        <input type="file" name="file" class="form-control" required>
-      </div>
-      <div class="mb-3">
         <label class="form-label">Description</label>
-        <input type="text" name="description" class="form-control">
+        <input type="text" name="description" class="form-control" value="{{ log.description }}">
       </div>
       <button type="submit" class="btn btn-primary">Save</button>
       <a href="/" class="btn btn-secondary">Cancel</a>
