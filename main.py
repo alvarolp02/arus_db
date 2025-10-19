@@ -76,7 +76,7 @@ def index(request: Request):
              "allowed_users": ALLOWED_USERS})
 
 
-# --- Formulario para añadir TEST ---
+# --- Form to add a Test ---
 @app.get("/add_test", response_class=HTMLResponse)
 def add_test_form(request: Request, user=Depends(require_auth)):
     return templates.TemplateResponse("add_test.html", {
@@ -99,7 +99,44 @@ def add_test(
     return RedirectResponse(url="/", status_code=303)
 
 
-# --- Formulario para añadir LOG ---
+# --- Form to edit a Test
+@app.get("/edit_test/{test_id}", response_class=HTMLResponse)
+def edit_test_form(request: Request, test_id: int, user=Depends(require_auth)):
+    db = SessionLocal()
+    test = db.query(Test).filter(Test.id == test_id).first()
+    db.close()
+    if not test:
+        return HTMLResponse("<h3>Test no encontrado</h3>", status_code=404)
+    return templates.TemplateResponse(
+        "edit_test.html",
+        {"request": request, "test": test, "user": user},
+    )
+
+
+@app.post("/edit_test/{test_id}")
+def update_test(
+    test_id: int,
+    name: str = Form(...),
+    description: str = Form(...),
+    date: datetime = Form(...),
+    user=Depends(require_auth)
+):
+    db = SessionLocal()
+    test = db.query(Test).filter(Test.id == test_id).first()
+    if not test:
+        db.close()
+        return HTMLResponse("<h3>Test no encontrado</h3>", status_code=404)
+    
+    test.name = name
+    test.description = description
+    test.date = date
+    db.commit()
+    db.close()
+
+    return RedirectResponse(url="/", status_code=303)
+
+
+# --- Form to add a Log ---
 @app.get("/add_log", response_class=HTMLResponse)
 def add_test_form(request: Request, user=Depends(require_auth)):
     db = SessionLocal()
